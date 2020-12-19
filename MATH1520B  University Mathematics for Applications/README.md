@@ -1,1 +1,1 @@
-A course which introduces basic concepts in Calculus.
+A course which introduces some basic concepts in Calculus.
