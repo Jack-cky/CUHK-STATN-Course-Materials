@@ -1,1 +1,1 @@
-A course which introduces basic concepts in Probabilities and Statistics.
+A course which introduces basic concepts in Probability and Statistics.
