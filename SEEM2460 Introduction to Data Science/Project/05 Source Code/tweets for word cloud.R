@@ -3,9 +3,9 @@ library(rtweet)
 library(httpuv)
 
 # personal information omitted here
-name <- "CCN3163"
-key <- "DaHAtekMUj1X1FnRDOL7UYPPT"
-secret <- "wDfGKweGG6snP7v6lzYuIKXO3OB3FlJaQSgRGskohHoF3110db"
+name <- "omitted"
+key <- "omitted"
+secret <- "omitted"
 
 ## create token named "twitter_token"
 
