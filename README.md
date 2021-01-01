@@ -7,5 +7,3 @@ As a backup, I will share with you some of my works and official solutions relat
 
 **Note: some of my works and even official solutions are not 100% correct, please treat them as reference only.**  
 **Note: my essay works are submitted to VeriGuide, hope you don't commit plagiarism.**  
-
-If you like this repository, please smack the start button just like how you smack CUSIS' mother during the add-drop period.  
