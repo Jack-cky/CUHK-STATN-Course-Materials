@@ -1,0 +1,11 @@
+Insert into SPONSORS values( 1, 'Koka-Kola',105 );
+Insert into SPONSORS values( 2, 'SOLY', 50 );
+Insert into SPONSORS values( 3, 'Panesony', 68 );
+Insert into SPONSORS values( 4, 'Appla', 150);
+Insert into SPONSORS values( 5, 'McDonna', 980);
+Insert into SPONSORS values( 6, 'Pizza LA', 31);
+Insert into SPONSORS values( 7, '4HK', 17);
+Insert into SPONSORS values( 8, 'Hennikan', 155);
+Insert into SPONSORS values( 9, 'Soga', 39);
+Insert into SPONSORS values( 10,'StarDuck',66);
+Insert into SPONSORS values( 11,'Moncow', 98);

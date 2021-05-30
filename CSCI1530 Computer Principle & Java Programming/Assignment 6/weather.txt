@@ -1,0 +1,41 @@
+<!--Current Weather-->
+<pre>
+At 6 p.m. at Hong Kong Observatory :
+Air Temperature : 82.4 degrees Fahrenheit
+Relative Humidity : 78 per cent
+Weather Cartoon : No. 76 - MAINLY CLOUDY 
+
+During the past hour the mean UV Index recorded at King's Park : 0.3
+Intensity of UV radiation : low
+
+The air temperatures at other places were:
+
+King's Park                     82.4 degrees;
+Wong Chuk Hang                  80.6 degrees;
+Ta Kwu Ling                     82.4 degrees;
+Lau Fau Shan                    80.6 degrees;
+Tai Po                          80.6 degrees;
+Sha Tin                         80.6 degrees;
+Tuen Mun                        80.6 degrees;
+Tseung Kwan O                   80.6 degrees;
+Sai Kung                        80.6 degrees;
+Cheung Chau                     82.4 degrees;
+Chek Lap Kok                    82.4 degrees;
+Tsing Yi                        80.6 degrees;
+Shek Kong                       82.4 degrees;
+Tsuen Wan Ho Koon               78.8 degrees;
+Tsuen Wan Shing Mun Valley      80.6 degrees;
+Hong Kong Park                  80.6 degrees;
+Shau Kei Wan                    80.6 degrees;
+Kowloon City                    82.4 degrees;
+Happy Valley                    80.6 degrees;
+Wong Tai Sin                    84.2 degrees;
+Stanley                         80.6 degrees;
+Kwun Tong                       80.6 degrees;
+Sham Shui Po                    80.6 degrees;
+Kai Tak Runway Park             80.6 degrees;
+Yuen Long Park                  82.4 degrees;
+Tai Mei Tuk                     80.6 degrees.
+
+</pre>
+<!--/Current Weather-->
