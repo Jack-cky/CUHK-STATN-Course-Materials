@@ -1,0 +1,42 @@
+LotFrontage: Linear feet of street connected to property
+
+LotArea: Lot size in square feet
+		
+LotShape: General shape of property
+
+       Reg	Regular	
+       IR1	Slightly irregular
+       IR2	Moderately Irregular
+       IR3	Irregular
+       
+	
+OverallCond: Rates the overall condition of the house
+
+       10	Very Excellent
+       9	Excellent
+       8	Very Good
+       7	Good
+       6	Above Average	
+       5	Average
+       4	Below Average	
+       3	Fair
+       2	Poor
+       1	Very Poor
+		
+MasVnrArea: Masonry veneer area in square feet
+
+TotalBsmtSF: Total square feet of basement area
+		
+1stFlrSF: First Floor square feet
+ 
+2ndFlrSF: Second floor square feet
+
+GrLivArea: Above grade (ground) living area square feet
+
+TotRmsAbvGrd: Total rooms above grade (does not include bathrooms)
+
+GarageArea: Size of garage in square feet
+		
+WoodDeckSF: Wood deck area in square feet
+
+OpenPorchSF: Open porch area in square feet

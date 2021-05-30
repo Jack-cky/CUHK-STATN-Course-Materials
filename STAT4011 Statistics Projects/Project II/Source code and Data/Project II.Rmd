@@ -1,0 +1,541 @@
+---
+title: "STAT4011 Project II <br> Data Analysis with <br> Supervised Learning Algorithms"
+author: "Name: King Yeung CHAN <br> SID: 1155119394"
+date: "17/12/2020"
+output: pdf_document
+---
+# Introduction
+We often curious about the true parameters encountered in a problem. In statistic, estimation helps to fulfil our curiosity. However, static analysis may not perform well when we are facing a real-life matter. Fortunately, there are some dynamic approaches to improve such an issue. We want to learn the pattern of data instead of generalising the overall data behaviour. Statistical learning favours our ultra goal to predict the solutions of real-life tasks.
+
+The project focuses on data analysis with supervised learning models on two famous datasets 'House' and 'Titanic'. We propose two sections in exploring the datasets. The first part will be the Regression Problem on estimating the final prices of houses, whereas the second part will be the Classification Problem for labelling the possible status of passengers, either survived or died. As the project aims to compare a variety of supervised learning models, we will focus on the implementation rather than the description of each model. Having said that, we still provide a brief introduction along with supplement from Wikipedia for the proposed models. Without further ado, let us dive into the analysis.
+<br>
+
+### Preliminaries
+We navigate the working directory to aid the data import. Also, we will report the cross-validation error and the prediction error of each model being used. Cross-validation is a method to prevent overfitting on a model by dividing the train data into k-folds and taking the average of mean squared error (MSE) for each fold. The prediction error is the squared distance between the actual value and the predicted value. Unlike the regression problem, the error measurement in the classification problem is based on the number of correct classification against the total number of prediction. Moreover, we evaluate the performance of the classification algorithms with the balanced accuracy in practice. The accuracy is defined as $F = \frac{1}{2} \times (\frac{TP}{TP + FN} + \frac{TN}{TN + FP})$. Although it is out of scope for the project, we make a record for reference. Hence, we initialise 'Cross-Validation Error', 'Prediction Error' and 'Balanced Error' to store the corresponding errors.
+```{r}
+setwd("/Users/jackchan/Documents/I go to school by bus/03 The Chinese University of Hong Kong/Year 3/Semester 1/STAT4011 Statistics Projects/Project II")
+
+result = list(reg_pro = data.frame(`Cross-Validation Error` = rep(0, 4), `Prediction Error` = rep(0, 4)), cla_pro = data.frame(`Cross-Validation Error` = rep(0, 4), `Prediction Error` = rep(0, 4), `Balanced Error` = rep(0, 4)))
+rownames(result$reg_pro) = c("Linear Regression", "Lasso Regression", "Partial Least Squares Regression", "Random Forest")
+rownames(result$cla_pro) = c("k-Nearest Neighbors", "Logistic Regression", "Linear Discriminant", "Boosting")
+```
+<br>
+
+# Regression Problem
+As the name suggested, we consider a situation as a regression problem when the response variable (RV) is quantitative. We want to predict the value of RV given unseen data in explanatory variables (EV). In the regression problem, we will implement the analysis with 'House' data.
+<br>
+
+### Data Background
+```{r}
+house = read.csv("House.csv", header = TRUE)
+dim(house)
+```
+What is your dream house looks like? How would you describe your desired one? The 'House' data consists of 500 observations with house prices as RV and 15 EVs. It is no doubt that the RV is a quantitative one. We plan to fit different models and predict the final costs of houses. Before our modelling, we will kick off with the exploratory data analysis (EDA).
+<br>
+
+### Exploratory Data Analysis
+```{r}
+summary(house[, -1])
+```
+We summarise the 'House' data with their statistics. We suspect the distributions of some variables are left-skewed. Those EVs may cause to biasedness in our analysis. Moreover, there are missing values in some EVs which we will deal with them later.
+<br>
+
+```{r, message = F, warning = F, fig.align = 'center'}
+library(corrplot)
+library(RColorBrewer)
+house_cor = house
+house_cor$LotShape = as.numeric(house_cor$LotShape)
+corrplot(cor(na.omit(house_cor)), type = "upper", order = "hclust", col = brewer.pal(n = 8, name = "RdYlBu"))
+```
+<br>
+
+Furthermore, we obtain a graph to describe the correlation among variables. We inspect 'SalePrice' highly correlates with 'GrLivArea' which may be a significant EV to develop our models. We also notice some EVs associate with each other, and it may be a signal of multicollinearity. We will take care of it while constructing models.
+<br>
+
+```{r, fig.align = 'center'}
+qqnorm(house$SalePrice)
+qqline(house$SalePrice, col = "steelblue", lwd = 2)
+```
+<br>
+
+When we are trying to inspect the distribution of RV, problematically, the above graph does not suggest 'SalePrice' is following a normal distribution. It is a critical issue in the regression problem as the normality requirement for the ordinary least squares (OLS) method. Put another way, we should not use the regression model for the analysis. It will ruin our investigation and the project. As such, we assume the normality of RV here to continue the report although it is not appropriate for some models we use in the later section.
+<br>
+
+### Missing Data and Data Cleansing
+As we discovered there are missing values appeared in the available data, we need to impute them to facilitate the analysis. There are 87 missing data in 'LotFrontage' and 1 missing data in 'MasVnrArea'. To preserve the information provided by the data as much as possible, we attempt to use a regression model to replace the missing values.
+```{r}
+shapiro.test(na.omit(house$LotFrontage))
+```
+However, the Shapiro-Wilk normality test does not suggest us to use a regression model because it violates the normality assumption of the OLS method. We, hence, substitute the missing data by its mean. We believe it is the best alternative to maintain the information.
+
+Moreover, there is a missing value in 'MasVnrArea'. We believe it is missing completely at random, and it is hard to replace the data as we know some people may not appreciate the area of masonry veneer. From the previous summary table, we can see that over 50% of houses do not consider the space. For the safety of analysis, we propose to fill it with its mode.
+
+Last but not least, the house id does not favour our modelling. So, we drop the 'id' for simplicity.
+```{r}
+house[which(is.na(house$LotFrontage)), "LotFrontage"] = mean(na.omit(house$LotFrontage))
+house[which(is.na(house$MasVnrArea)), "MasVnrArea"] =  (na.omit(house$MasVnrArea))[which.max(tabulate(match(na.omit(house$MasVnrArea), unique(na.omit(house$MasVnrArea)))))]
+house = house[-1]
+```
+<br>
+
+### Preliminaries
+We divide the 'House' data into two parts. One will be a train data which helps to develop models, and the other one will be a test data which serves to evaluate the accuracy of models. The division helps to facilitate the model evaluation by finding the prediction error. Of course, we will consider model selection during each development. Since there are some turning parameters which controls the complexity of our proposed model, we will use cross-validation to tune those parameters.
+```{r, message = F, warning = F}
+RNGkind(sample.kind = "Rounding")
+set.seed(4011)
+index = sample(1:nrow(house), nrow(house) * 0.1)
+train = rep(T, nrow(house))
+train[index] = F
+test = !train
+```
+<br>
+
+### [Linear Regression Model](https://en.wikipedia.org/wiki/Linear_regression)
+Linear regression is one of the most common approaches to learn the data pattern. It uses OLS method to minimise the residual sum of squares (RSS), such that we have the famous formula $\hat{Y} = X\hat{\beta}$.
+```{r}
+lin_reg = lm(SalePrice ~ ., data = house, subset = train)
+summary(lin_reg)
+```
+
+For the full model, which contains all the EVs, the adjusted $R^2$ is $79.49%$. Although it seems that EVs are pretty good to explain the variation of RV, there are some inefficient parties. Model selection helps to eliminate those unnecessary EVs in the model. We will pick the parsimonious model under the criteria of AIC and BIC with stepwise selection.
+<br><br>
+
+```{r, results = F, message = F, warning = F}
+library(MASS)
+library(dplyr)
+AIC = lin_reg %>% stepAIC(trace = T)
+BIC = lin_reg %>% stepAIC(trace = log(nrow(house)))
+```
+
+```{r}
+AIC$call == BIC$call
+
+model_terms = strsplit(as.character(AIC$call$formula), " ")
+model_terms = model_terms[[3]][model_terms[[3]] != "1" & model_terms[[3]] != "+"]
+model_terms
+```
+
+Under the criteria of AIC and BIC, coincidentally, both of them suggest the same parsimonious model by removing 'LotFrontage', 'LotArea', 'GrLivArea' and 'WoodDeckSF' from the full model. The parsimonious model is developed based on the train data and the criteria of AIC and BIC. We, consequently, fit the 'relative best' model as the final model to estimate the house prices.
+<br><br>
+
+```{r, message = F, warning = F}
+library(boot)
+lin_reg = glm(paste0("SalePrice ~ ", as.character(AIC$call$formula)[3]), data = house, subset = train)
+summary(lin_reg)
+```
+
+Although there are two inefficient coefficient estimates, we accept the model as it achieves the parsimonious model among all possible models. In other words, the fitted model is ready to serve for our analysis.
+<br><br>
+
+```{r}
+result$reg_pro[1, 1] = cv.glm(house[train, ], lin_reg, K = 10)$delta[1]
+result$reg_pro[1, 2] = mean((predict(lin_reg, house[test, ]) - house$SalePrice[test]) ^ 2)
+result$reg_pro[1, ]
+```
+To evaluate the model accuracy, we use 10-folds cross-validation to get the generalised MSE. The MSE for linear regression is $1442086829$, and the prediction error is $960622735$. One thing to remind here is that the RV is not normally distributed, which violates the OLS assumption. It may be an improper use of the linear regression model.
+<br><br>
+
+### [Lasso Regression Model](https://en.wikipedia.org/wiki/Lasso_(statistics))
+Instead of using AIC and BIC to select the model, lasso regression introduces a penalty term that forces some of the coefficient estimates to be exactly equal to zero. Ridge regression does similar things, but it will include all the EVs in the final model, which is not very pleasant, so we only focus on lasso regression in the project. The idea of lasso regression minimises the RSS and a shrinkage penalty, which is defined as $\arg \min(RSS + \lambda\sum|\beta_j|)$. The greater the $\lambda$, the more penalisation will be given to the coefficients. Since $\lambda$ is a tuning parameter, we will use cross-validation to select it. In addition, the coefficient estimates are scale variant, and we need to standardising them to avoid them change substantially.
+```{r, message = F, warning = F}
+x = model.matrix(SalePrice ~ ., data = house)[, -1]
+x = scale(x)
+y = house$SalePrice
+
+library(glmnet)
+las_reg = glmnet(x[train, ], y[train], alpha = 1)
+lambda = cv.glmnet(x[train,], y[train], alpha = 1, number = 10)
+```
+
+```{r, fig.align = 'center'}
+par(mfrow = c(1, 2))
+plot(las_reg, xvar = "lambda", label = TRUE)
+plot(lambda)
+```
+<br>
+
+On the left-hand side, each line represents a coefficient estimate. The graph describes what we have just mentioned a second before. When the value of $\lambda$ increases, the coefficient estimates toward zero and even equal to zero, which is equivalent to model selection for some coefficients exact zero. Since we want to select a model that minimises the MSE, we need to find a value of $\lambda$ that satisfies our goal. We utilise 10-folds cross-validation to determines the size of penalisation. On the right-hand side, the diagram illustrates the MSE at different levels of $\lambda$. We notice that the model will have the smallest cross-validation error when $\lambda$ is about $\log(7.4)$. We, then, fit the lasso regression with such value to estimate the house costs.
+
+```{r}
+las_reg = glmnet(x[train, ], y[train], alpha = 1, lambda = lambda$lambda.min)
+coefficients(las_reg)
+```
+
+The final model drops 'LotShapeIR3', 'X1stFlrSF', 'X2ndFlrSF' and 'TotRmsAbvGrd' out from the full model. The model suggests a different EV elimination than that of of the linear regression we modelled previously. Again, we record the cross-validation error and prediction error of the model for the model evaluation.
+<br>
+
+```{r}
+result$reg_pro[2, 1] = min(lambda$cvm)
+result$reg_pro[2, 2] = mean((predict(las_reg, s = lambda$lambda.min, newx = x[test, ]) - y[test]) ^ 2)
+result$reg_pro[2, ]
+```
+With 10-folds cross-validation, the MSE is $1423777022$, and the prediction error is $946892882$. Both MSE in cross-validation and prediction is slightly smaller than the linear regression. Because they are using different model selection criteria, the performance will also be divergent.
+<br><br>
+
+### [Partial Least Squares Regression Model](https://en.wikipedia.org/wiki/Partial_least_squares_regression)
+Principal component regression (PCR) takes the advantages of principal component analysis (PCA) to transform EVs and reduce their dimensions. Yet, PCR focus on preserving the variation within EVs. In the project, we are interested in the association between RV and EVs instead of EVs themselves. Partial least squares regression (PLS) behaves similar but concentrate on the relationship between RV and EVs, which favour our project more. Thus, we adopt PLS regression as an additional learning model for the 'House' data.
+```{r, message = F, warning = F}
+library(pls)
+pls_reg = plsr(SalePrice ~ ., data = house, subset = train, scale = T, validation = "CV", number = 10)
+summary(pls_reg)
+```
+
+From the above summary table, we notice that the Root MSE (RMSE) is $37391$ with 5 components under 10-folds cross-validation. Besides, 5 components already explain $80.13%$ of correlation between RV and EVs. Simply put, the PLS regression with 5 components perform well in explaining the variation of RV.
+
+```{r, fig.align = 'center'}
+validationplot(pls_reg, val.type = "MSEP")
+```
+<br>
+
+The plot describes the values of MSE with different numbers of components. The difference in errors is not very significant, and it is hard to eyeball the smallest one. Thankfully, we already know 5 components are the best one to explain the variation. It is complicated to interpret the result of PLS regression, so we may only compute the errors in cross-validation and prediction.
+<br>
+
+```{r}
+result$reg_pro[3, 1] = 37391 ^ 2
+result$reg_pro[3, 2] = mean((predict(pls_reg, x[test, ], ncomp = 5) - y[test]) ^ 2)
+result$reg_pro[3, ]
+```
+The MSE of PLS regression is $1398086881$, and its prediction error is $65366530722$. Both errors are larger than the other regression methods used beforehand. It seems 'House' data is not suitable to reduce EVs' dimension for estimation. Recall the PLS model summary table, there is only $52.91%$ of variation maintained in 5 components. For PLS regression, it emphasises the association between RV and EVs. However, the house price varies when there comes to a new feature in the house. We foresee the PCR regression behaves similarly as preserving the correlation among EVs may not function well on the relation with RV.
+<br><br>
+
+### [Radnom Forests Model](https://en.wikipedia.org/wiki/Random_forest)
+So far we have gone through a few traditional regression methods. We want to model the 'House' data in a different aspect. In artificial intelligence, the decision tree is one of the simplest and yet most successful forms of learning algorithms in inductive learning. We propose to use a regression tree to stratify the EVs' space into smaller regions and predict the final house prices. However, one decision tree may consist of biasedness to the prediction. We, consequently, consider the use of random forest, an improved version of bagging. Bagging constructs multiple decision trees and predicts the final result by taking the average of predicted RV. As some trees in bagging may be correlated on each other, we want to decorrelate them by considering a random selection of $p/3$ EVs in each split, that is the idea of random forest.
+```{r, message = F, warning = F, fig.align = 'center'}
+library(tree)
+tre_reg = tree(SalePrice ~ ., data = house, subset = train)
+tre_reg = prune.tree(tre_reg, best = 6)
+plot(tre_reg)
+text(tre_reg, pretty = 0)
+```
+<br>
+
+The above tree diagram demonstrates a tree-liked algorithm may appear in the random forest. For each tree, the space of EVs is segmented based on the smallest RSS for each EV. To avoid overfitting, we may prune the tree according to the advice from cross-validation. The diagram illustrates how it would be when we prune the tree and retain 6 leaf nodes. In the random forest, the random selection of EVs replaces the pruning process for a simpler tree in the forest.
+
+```{r, message = F, warning = F, fig.align = 'center'}
+library(randomForest)
+rfm_reg = randomForest(SalePrice ~ ., data = house, subset = train, mtry = round((ncol(house) - 1) / 3), importance = T)
+varImpPlot(rfm_reg)
+```
+<br>
+
+The above graphs show the importance of each EV while modelling the random forest. Although two pictures use different measurements, the top three important EVs are 'GrLivArea', 'GarageArea' and 'TotalBsmtSF'. Recall the EDA that we have discussed at the beginning of the section, the correlation of 'GrLivArea' and 'SalePrice' shows a signal that it is essential in model development. We inspect the higher correlation with RV, the more important of EV.
+
+```{r, fig.align = 'center'}
+plot(rfm_reg)
+```
+<br>
+
+We have developed 500 trees to form a forest as the final model. As we can see in the above diagram, the error decreases as the number of trees increase. It shows the beauty of the random forest, which reduces the MSE by growing a lot of trees.
+<br>
+
+```{r}
+result$reg_pro[4, 1] = tail(rfm_reg$mse, 1)
+result$reg_pro[4, 2] = mean((predict(rfm_reg, newdata = house[test, ]) - y[test]) ^ 2)
+result$reg_pro[4, ]
+```
+The construction of each tree is using a different bootstrap sample from the original data. In other words, the random forest does not require cross-validation to select the best one ([B.Leo and C.Adele](https://www.stat.berkeley.edu/~breiman/RandomForests/cc_home.htm#ooberr)). We report the MSE as the cross-validation error here. The MSE of the random forest is $1353853738$, and the prediction error is $648139582$. Both errors are less than the proposed model before especially the prediction error is significantly less than others.
+<br><br>
+
+### Summary of Regression Problem
+```{r}
+sqrt(result$reg_pro)
+```
+For reading-friendly, we convert the MSE to RMSE to express the errors in each model. It is crystal clear that the random forest model is the best among the four proposed models, which has the lowest cross-validation error and prediction error. The other models seem to have similar performance in fitting the 'House' data. However, the prediction of PLS regression is significantly larger than the others. PLS regression acts the worst on adapting new environment change in the given data. For 'House' data, the recommended model is the random forest, whereas the least suggestion is PLS regression. Since the random forest is dividing the space of EVs, there are some other methods adopt a similar concept, such as regression spline. It motivates a further investigation on the same set of data in the future.
+<br><br>
+
+# Classification Problem
+Sometimes, we may encounter a problem where RV is qualitative. We consider the circumstance as a classification problem. We want to estimate the likelihood of RV belongs to a particular class. In the classification problem, we will implement the analysis with 'Titanic' data.
+<br>
+
+### Data Background
+```{r}
+titanic <- read.csv("Titanic.csv", header = TRUE)
+dim(titanic)
+```
+Once upon a time, there was an accidence that Titanic sank after colliding with an iceberg. Under the terrible situation, there was not enough resource to save all lives. The 'Titanic' data consists of 500 passengers information in the accidence. We want to develop models to investigate whether a passenger will survive in the crash. As usual, we will start with EDA before our investigation.
+<br>
+
+### Exploratory Data Analysis
+```{r}
+summary(titanic[, -1])
+```
+As we know that only 'age', 'sibsp', 'parch' and 'fare' are quantitative data, it is difficult to interpret the findings from the summary statistics. Likewise, there are missing data appeared in the dataset, which happened in 'Age' and 'Embarked'. Unfortunately, there are so many missing data occurred in 'Age', and we will handle the critical issue in the next section.
+<br>
+
+```{r, message = F, warning = F, fig.align = 'center', fig.height = 5, fig.width = 10}
+female = sum(titanic[which(titanic$Sex == "female"), "Survived"])/ sum(titanic$Survived == 1)
+male = sum(titanic[which(titanic$Sex == "male"), "Survived"])/ sum(titanic$Survived == 1)
+
+upperClass = mean(titanic[which(titanic$Pclass == 1), "Survived"])
+middleClass = mean(titanic[which(titanic$Pclass == 2), "Survived"])
+lowerClass = mean(titanic[which(titanic$Pclass == 3), "Survived"])
+
+library(RColorBrewer)
+par(mfrow = c(1, 2))
+barplot(c(female, male), names = c("Female", "Male"), ylim = c(0, 0.8), col = brewer.pal(3, "Set1"))
+barplot(c(upperClass, middleClass, lowerClass), names = c("Upper Class", "Middle Class", "Lower Class"), ylim = c(0, 0.6), col = brewer.pal(3, "Set2"))
+```
+<br>
+
+If we just eyeball the summary findings, it is tough to find out any useful information from the above table. So, we plot the proportion of survived passengers by gender and their tickle class. On the left-hand side, we discover females seem to have a higher survival rate than males. In the old days, people emphasis the gentleness towards women. Those gentlemen possibly sacrifice themselves and let women get into the lifeboats first. That is one of the possible reason females have a higher survival rate. Come back, Jack! Furthermore, on the right-hand side, the graph shows passengers who hold upper-class tickle has a higher chance to survive. We suspect lifeboats are located near the position of the upper-class seat. After the collision, the upper-class passengers are more easily to get into the lifeboats.
+<br>
+
+### Missing Data and Data Cleansing
+There are 102 missing values in 'Age' which occupied 20% of the data. We assume they are missing at random, and it is out of scope to make further investigation. We cannot impute those missing data casually since we consider 'Age' as an important feature in the 'Titanic' data. It implicitly describes the survival ability of that person, such as physical power and mobility. We assume most of the passengers were not born with a silver spoon in their mouths. Junior tends to prefer lower class due to their financial ability. In other words, we hypothesise passengers with higher ticket class are older people.
+```{r, fig.align = 'center', fig.height = 4}
+par(mfrow = c(1, 3))
+hist(titanic[which(titanic$Pclass == 1), "Age"], xlab = "Upper Class", main = NULL, col = brewer.pal(3, "Set2")[1])
+hist(titanic[which(titanic$Pclass == 2), "Age"], xlab = "Middle Class", main = NULL, col = brewer.pal(3, "Set2")[2])
+hist(titanic[which(titanic$Pclass == 3), "Age"], xlab = "Lower Class", main = NULL, col = brewer.pal(3, "Set2")[3])
+```
+<br>
+
+As expected, passengers who hold lower-class tickle are mostly younger, and those in the higher class tend to be older. From the above phenomenon, we propose to replace the missing 'Age' values by 90% trimmed mean of their corresponding ticket class.
+
+In addition, there is only a missing data appeared in 'Embarked', we believe it is missing completely at random. Since we lack the background about the port of embarkation, we may only rely on the available data to replace the missing one. From the previous summary table, we know the majority of passengers onboard from Southampton. We guess that passenger with missing value in 'Embarked' also on board from Southampton. Thus, we may only replace the missing data with its mode again.
+
+Besides, we label the class of 'Survived' to facilitate our works. For those with '1' in value, we rename it as 'Survived'. Otherwise, we rename it as 'Died'.
+
+As some of the learning algorithms we use in the later section do not support categorical variables, we treat those variables as quantitative instead, when we are applying those algorithms. We will convert the categorical variables into factor data type here as well.
+
+Last but not least, the passenger id does not favour our modelling. We drop the 'PassengerId' for simplicity.
+```{r}
+titanic[which(is.na(titanic$Age)), "Age"] = ifelse(titanic$Pclass == 1, round(mean(na.omit(titanic[which(titanic$Pclass == 1), "Age"]), trim = 0.1)), ifelse(titanic$Pclass == 2, round(mean(na.omit(titanic[which(titanic$Pclass == 2), "Age"]), trim = 0.1)), round(mean(na.omit(titanic[which(titanic$Pclass == 3), "Age"]), trim = 0.1))))[which(is.na(titanic$Age))]
+titanic[which(titanic$Embarked == ""), "Embarked"] = "S"
+titanic$Embarked = as.factor(as.character(titanic$Embarked))
+titanic$Sex = as.factor(titanic$Sex)
+titanic$Survived = factor(ifelse(titanic$Survived == 1, "Survived", "Died"))
+titanic = titanic[-1]
+```
+<br>
+
+### Preliminaries
+To inhibit the chance of overfitting, again, we split the 'Titantic' data into two parts. The first part will be a train data for training models, and the remaining portion will be treated as a test data which uses to examine the precision of models. Furthermore, we will utilise cross-validation to choose the tuning parameters that appear in the proposed models. Model selection will be considered, as well.
+```{r}
+set.seed(4011)
+index = sample(1:nrow(titanic), nrow(titanic) * 0.1)
+train = rep(T, nrow(titanic))
+train[index] = F
+test = !train
+```
+<br>
+
+### [k-Nearest Neighbors Model](https://en.wikipedia.org/wiki/K-nearest_neighbors_algorithm)
+In the real world, we often interested in finding similar items as a prediction. We group objects into different clusters by the similarity of characteristics to predict the potential outcomes. For the k-nearest neighbour (KNN) method, we compute the Euclidean distance of passengers and infer them with similar properties. The classifier is formulated as $C_K(x) = \frac{\sum N_K(x, x_i) y_i}{K}$. As the name suggested, the KNN method finds adjacent passengers to classify the labels. The prediction varies as the value of $K$ is arbitrary. Thus, we use 10-folds cross-validation to select the optimal value of $K$.
+```{r, message = F, warning = F, fig.align = 'center'}
+library(caret)
+library(e1071)
+ctrl = trainControl(method = "cv", number = 10)
+knn_mod = train(Survived ~ ., data = titanic, subset = train, method = "knn", trControl = ctrl, tuneGrid   = expand.grid(k = 2:50))
+plot(knn_mod)
+```
+<br>
+
+The above graph illustrates the number of neighbours against accuracy. Everyone can notice that the algorithm performs the best when considering $12$ neighbours nearby, and $6$ is the worse case. One interesting thing is when the number of neighbours increase, the power of the method becomes ill. If we think about the drawbacks of KNN, it is sensitive to irrelevant EVs and the scale of data ([C.Marina](https://www.mygreatlearning.com/blog/knn-algorithm-introduction/])). We, hence, attempt to perform model selection based on the result we have discussed in the EDA previously. We pick 'Pclass', 'Sex' and 'Age' as the EVs in the final model. Nevertheless, 'Sex' is a categorical variable, and we cannot normalise the variables. Thus, we simply treat it as quantitative data instead.
+```{r, fig.align = 'center'}
+knn_mod = train(Survived ~ Pclass + Age + Sex, data = titanic, subset = train, method = "knn", trControl = ctrl, tuneGrid   = expand.grid(k = 2:50))
+plot(knn_mod)
+```
+<br>
+
+After choosing the final model, it is noticeable that the accuracy indeed improved for the first 30 neighbours. In other words, if we consider $30$ neighbours nearby, we can still obtain about 70% accuracy in predicting the status of passengers from the train data. Lastly, we designate $2$ neighbours of passengers as the turning parameter since it attains the highest accuracy in 10-folds cross-validation.
+<br>
+
+```{r, message = F, warning = F}
+knn_pre = predict(knn_mod, newdata = titanic[test, ])
+
+library(MLmetrics)
+result$cla_pro[1, 1] = 1 - knn_mod$results[knn_mod$bestTune[1, 1], "Accuracy"]
+result$cla_pro[1, 2] = 1 - mean(knn_pre == titanic$Survived[test])
+result$cla_pro[1, 3] = 1 - F1_Score(knn_pre, titanic$Survived[test], NULL)
+result$cla_pro[1, ]
+```
+The reported MSE for the KNN is $0.2688208$, and the prediction error is $0.26$. The performance seems quite honourable in classifying the status of passengers with about 70% accuracy, although we do not normalise the EVs in the algorithm. Other possible modelling approaches may do better if we can overcome the problem of the scale variant.
+<br><br>
+
+### [Logistic Regression Model](https://en.wikipedia.org/wiki/Logistic_regression)
+In the regression problem, we heavily rely on using the regression model. If we relax the OLS method assumption a little bit, we can use a generalised linear model (GML) to estimate the probability of survival. Given RV is binary data, either survived or died, we have a GML with the logit link function. Its name is logistic regression, which is formulated as $logit(\pi) = \beta_0 + \beta_1x_1 + \cdots + \beta_px_p$.
+```{r}
+log_reg = glm(Survived ~ ., data = titanic, subset = train, family = binomial)
+summary(log_reg)
+```
+
+For the full model, the deviance is $392.43$, which is far away from the saturated model. Moreover, we construct a likelihood ratio test to verify the effectiveness of the coefficient estimates. The test statistic $G ^ 2$ is $212.46$ with $8$ degree of freedom. The reported p-value approximates $0$. Although the full model is adequate, there are only a few coefficient estimates are effectual. When there are some inefficient parties in an adequate model, the issue of multicollinearity may happen in the given EVs. We, hence, elect the parsimonious model under the criteria of AIC and BIC with stepwise selection.
+<br><br>
+
+```{r, results = F, message = F, warning = F}
+AIC = log_reg %>% stepAIC(trace = T)
+BIC = log_reg %>% stepAIC(trace = log(nrow(titanic)))
+```
+
+```{r}
+AIC$call == BIC$call
+
+model_terms = strsplit(as.character(AIC$call$formula), " ")
+model_terms = model_terms[[3]][model_terms[[3]] != "1" & model_terms[[3]] != "+"]
+model_terms
+```
+
+From the suggestion given by AIC and BIC, accidentally, both criteria recommend the same parsimonious model. The model with "Pclass", "Sex", "Age" and "SibSp" is considered as parsimonious under the criteria of AIC and BIC from the train data. Therefore, we will fit the 'relative best' model to guess whether a passenger will be safe or not.
+<br>
+
+```{r}
+log_reg = glm(paste0("Survived ~ ", as.character(AIC$call$formula)[3]), data = titanic, subset = train, family = binomial)
+summary(log_reg)
+```
+
+From the summary table, we can see that all the coefficient estimates are efficacious. The deviance to the saturated model is $396.05$, which is very close to the previous one. Yet, the model is the merely choice since it is the greedy model among all possible fits.
+<br><br>
+
+```{r}
+log_pro = predict(log_reg, newdata = titanic[test, ], type = "response")
+log_pre = rep("Died", length(log_pro))
+log_pre[log_pro > 0.5] = "Survived"
+
+result$cla_pro[2, 1] = cv.glm(titanic[train, ], log_reg, K = 10)$delta[1]
+result$cla_pro[2, 2] = 1 - mean(log_pre == titanic$Survived[test])
+result$cla_pro[2, 3] = 1 - F1_Score(log_pre, titanic$Survived[test], NULL)
+result$cla_pro[2, ]
+```
+We evaluate the model with 10-folds cross-validation to obtain the generalised MSE. The MSE for our fitted logistic regression is $0.1414204$, and the prediction error is $0.28$. The performance of logistic regression very close to KNN, however, logistic regression is a little bit puny than KNN.
+<br><br>
+
+### [Linear Discriminant Analysis](https://en.wikipedia.org/wiki/Linear_discriminant_analysis)
+Under a similar setting with the logistic regression algorithm, our minds come to the linear discriminant analysis (LDA). LDA is analogous to PCA that we have mentioned before. Both of them are trying to reduce the dimensions of EVs to facilitate the analysis. Yet, LDA focuses on maximising the separability among known RV instead of preserving the most variation in EVs. To classify a passenger, we need to find the discriminant function which is defined as $\delta_k(x) = x \times \frac{\mu_k}{\sigma ^ 2} - \frac{\mu ^ 2 _ k}{2 \sigma ^ 2} + \log(\pi_k)$. The idea of LDA is creating new axes for EVs and project data points onto the new axes in a way to minimise the separation of RV. The target is to maximise the distance between means and minimise the scatter (or variation) within the possible values in RV.
+```{r}
+lda_mod = lda(Survived ~ ., data = titanic, subset = train)
+lda_mod
+```
+
+From the above summary table, LDA maximised the group means and minimised their scatters for the RV, either 'Survived' or 'Died'. Moreover, LDA also suggests the probability of labelling 'Died' for a passenger is $0.6022222$, which is indeed a miserable fact.
+<br>
+
+```{r, fig.align = 'center'}
+plot(lda_mod)
+```
+<br>
+
+Visually, we can see that if a passenger who lies on the x-axis (created by LDA after dimension reduction) with a higher value, that person will have a higher survival rate than those with a lower value. Furthermore, the probabilities for both categories in RV seem to follow some distributions, although the shape is not very clear. It is also a property of LDA which defines the decision boundary.
+<br><br>
+
+```{r}
+lda_cv = function(titanic, train, K) {
+  data = titanic[train, ]
+  rownames(data) = NULL
+  n = nrow(data)
+  fold = K
+  foldIndex = sample(fold, n, replace = T)
+  error = rep(0, fold)
+  for(i in 1:fold) {
+    train = foldIndex != i
+    test = foldIndex == i
+    lda_cvm = lda(Survived ~ ., data = data, subset = train)
+    lda_cvp = predict(lda_cvm, newdata = data[test, ])
+    error[i] = 1 - mean(lda_cvp$class == data$Survived[test])
+  }
+  return(mean(error))
+}
+
+lda_pre = predict(lda_mod, newdata = titanic[test, ])
+
+result$cla_pro[3, 1] = lda_cv(titanic, train, 10)
+result$cla_pro[3, 2] = 1 - mean(lda_pre$class == titanic$Survived[test])
+result$cla_pro[3, 3] = 1 - F1_Score(lda_pre$class, titanic$Survived[test], NULL)
+result$cla_pro[3, ]
+```
+For the moment, LDA performs the best among all the proposed models. The 10-folds cross-validation error is $0.1942697$, and the prediction error is $0.22$. There is almost 80% accuracy for classifying a passenger in the accidence. Dimension reduction seems to be robust in such a situation. Unlike PLS regression we used in the earlier section, LDA can eliminate the dimension but also preserve the accuracy in labelling a passenger. When we talk about something high-level idea in algebra, our mind comes up with the most powerful method we used in the regression problem.
+<br><br>
+
+### [Boosting](https://en.wikipedia.org/wiki/Boosting_(machine_learning))
+In the regression problem, we used a random forest to predict the house prices in a brawny way. For the classification problem, we try to use a gentle way to learn the data pattern like those men who sacrifice themselves to save women lives. AdaBoost is an extension of boosting which grows trees sequentially. Each tree will only split once based on the feedback given by the previous trees. As said, the learning process is very slow, but it is robust to study some region of the EVs' space that other algorithms do not focus on.
+```{r, message = F, warning = F, fig.align = 'center'}
+library(ada)
+library(rpart.plot)
+
+ctrl = rpart.control(cp = -1, maxdepth = 14, maxcompete = 1, xval = 0)
+
+ada_cv = function(titanic, train, K) {
+  data = titanic[train, ]
+  rownames(data) = NULL
+  n = nrow(data)
+  fold = K
+  foldIndex = sample(fold, n, replace = T)
+  B = seq(100, 500, 100)
+  len = length(B)
+  BE = rep(0, len)
+  for(j in 1:len) {
+    error = rep(0, fold)
+    for(i in 1:fold) {
+      train = foldIndex != i
+      test = foldIndex == i
+      ada_cvm = ada(Survived ~ ., data = data[train, ], type = "gentle", control = ctrl, iter = B[j])
+      ada_cvp = predict(ada_cvm, newdata = data[test, ])
+      error[i] = 1 - mean(ada_cvp == data$Survived[test])
+    }
+    BE[j] = mean(error)
+    ## print(paste0("Cross-Validation error for B = ", B[j], " is ", BE[j]))
+    ## [1] "Cross-Validation error for B = 100 is 0.176181824450102"
+    ## [1] "Cross-Validation error for B = 200 is 0.175257384947834"
+    ## [1] "Cross-Validation error for B = 300 is 0.181443500419664"
+    ## [1] "Cross-Validation error for B = 400 is 0.190334876645067"
+    ## [1] "Cross-Validation error for B = 500 is 0.19651327271708"
+  }
+  return(list(BE, B[which(BE == min(BE))], min(BE)))
+}
+
+cve = ada_cv(titanic, train, 10)
+plot(seq(100, 500, 100), cve[[1]], type = "o", xlab = "#. of B", ylab = "10-folds Cross-Validation Error")
+```
+<br>
+
+The learning process of AdaBoost is controlled by a shrinkage parameter $\lambda$, which usually be $0.01$ or $0.001$. In our algorithm, we restrict it to be $0.1$ to speed up learning time a little bit. Also, the number of trees $B$ in the forest depends on the value of $\lambda$, which is a tuning parameter. We, hence, use 10-folds cross-validation to select it. For simplicity and limited computing power, we only consider in a unit of 100 trees per iteration, and the maximum is 500 trees. From the above graph, we notice the optimal value for $B$ is 200. The cross-validation error increase afterwards. So, we will grow a forest with 200 trees to achieve our goal.
+
+```{r}
+ada_mod = ada(Survived ~ ., data = titanic[train, ], type = "gentle", control = ctrl, iter = cve[[2]])
+summary(ada_mod)
+```
+
+The above summary table tells us a crazy fact that it attains 92% accuracy in the train data, and we believe AdaBoost will perform extremely well in the test data as well.
+<br>
+
+```{r, fig.align = 'center'}
+varplot(ada_mod)
+```
+<br>
+
+Similar to the random forest, Adaboost also records the importance of each EV. 'Pclass' ranks the most crucial for splitting a node. It implies that the chance of survival highly depends on the tickle class that a passenger holds. Recall the discussion in EDA, the graph further verifies the importance of 'Pclass' in the 'Titanic' data. It gives us noteworthy information on classifying the status of passengers for sure.
+<br><br>
+
+```{r}
+ada_pre = predict(ada_mod, newdata = titanic[test, ])
+
+result$cla_pro[4, 1] = cve[[3]]
+result$cla_pro[4, 2] = 1 - mean(ada_pre == titanic$Survived[test])
+result$cla_pro[4, 3] = 1 - F1_Score(ada_pre, titanic$Survived[test], NULL)
+result$cla_pro[4, ]
+```
+Not surprising, the performance of AdaBoost beats other models that we have implemented. The prediction error is $0.2$, and the 10-folds cross-validation error is $0.1752574$. The AdaBoost algorithm can be improved with a smaller learning rate and larger forest. Having said that, the boosting method already accomplishes an excellent result for classifying the status of passengers.
+<br><br>
+
+### Summary of Classification Problem
+```{r}
+result$cla_pro
+```
+In the above summary table, although the cross-validation error for logistic regression attains the lowest one among all the proposed models, the performance is not very well. It is reasonable since logistic regression is the only model that we have implement model selection for the parsimonious fit. Beside, although we measure the performance using prediction error, we have recorded the balanced accuracy for each model. It takes the advantages of the confusion matrix by considering the type of errors in prediction. From the above summary table, no matter which measurement is used, the result remains the same. It is no doubt that boosting is the best among other proposed models. The logistic regression is a little bit inferior but still achieve 70% accuracy. When we come to the classification problem, it is more favourable to apply dimensional reduction. The idea of LDA is simpler than boosting but still can result in a comparable effect. Furthermore, KNN uses distance measurement to find similar passengers for prediction. If the used EVs that can be scaled, the outcome may be ameliorated. Again, it motivates us to have further study in other learning algorithms for the classification problem.
+<br><br>
+
+## Summary
+The project spotlights on the 'House' and 'Titanic' data from supervised learning algorithms. From both the regression problem and the classification problem, we notice that tree-based methods are extremely muscular in predicting the house prices and the survival passengers. Well done, the random forest and Adaboost. Yet, there are many more learning algorithm can achieve the same goal but not covered in the project. We have gone through some popular supervised learning algorithms, but the results can be concluded from unsupervised learning models. The outputs for those learning methods can result in comparable results as well. Further investigation on implementing those models may give us more insight into the 'real-problem' that we encountered, and we will leave it into the near future.
+<br><br>
+
+## Reference
+B.Leo,  C.Adele (2004) *Random Forests*. University of California, Berkeley. 23 November 2020 https://www.stat.berkeley.edu/~breiman/RandomForests/cc_home.htm retrieved
+
+C.Marina (2020) *A Quick Introduction to KNN Algorithm*. Great Learning Blog. 29 November 2020 https://www.mygreatlearning.com/blog/knn-algorithm-introduction/ retrieved
+
+&nbsp;
+<hr />
+<p style="text-align: center;">A work by Jack CHAN </a></p>
+<p style="text-align: center;"><span style="color:#808080;"><em>1155119394@link.cuhk.edu.hk</em></span></p>
+<p style="text-align: center;">All Rights Reserved </a></p>
+&nbsp;
